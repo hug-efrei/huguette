@@ -48,7 +48,6 @@ Variables disponibles :
 | `QBIT_URL` | URL de qBittorrent | `http://192.168.1.202:8080` |
 | `QBIT_USERNAME` | Login qBittorrent | `admin` |
 | `QBIT_PASSWORD` | Mot de passe qBittorrent | `adminadmin` |
-| `CALIBRE_WATCHFOLDER` | Chemin où sont déposés les torrents | `/downloads/calibre` |
 
 ---
 

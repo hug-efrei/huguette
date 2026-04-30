@@ -20,8 +20,7 @@ async def add_torrent(magnet: str, title: str = "") -> bool:
             f"{settings.qbit_url}/api/v2/torrents/add",
             data={
                 "urls": magnet,
-                "savepath": settings.calibre_watchfolder,
-                "category": "calibre",
+                "category": "huguette",
                 "autoTMM": "true",
             },
             cookies=cookies,
@@ -35,7 +34,7 @@ async def get_torrents() -> list[dict]:
         cookies = await _login(client)
         resp = await client.get(
             f"{settings.qbit_url}/api/v2/torrents/info",
-            params={"category": "calibre"},
+            params={"category": "huguette"},
             cookies=cookies,
             timeout=10.0,
         )
