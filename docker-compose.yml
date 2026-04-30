@@ -1,0 +1,10 @@
+services:
+  huguette:
+    build: .
+    image: huguette:latest
+    container_name: huguette
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
