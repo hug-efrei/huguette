@@ -54,15 +54,7 @@ Variables disponibles :
 
 ## Installation — image Docker pré-construite (recommandée)
 
-Aucun clone nécessaire. L'image est publiée sur GHCR (`ghcr.io/hug-efrei/huguette`).
-
-> Le repo étant privé, l'image l'est aussi par défaut. Authentifie-toi à GHCR la première fois :
->
-> ```bash
-> echo "$GITHUB_TOKEN" | docker login ghcr.io -u hug-efrei --password-stdin
-> ```
->
-> (Génère un PAT sur https://github.com/settings/tokens avec le scope `read:packages`.)
+Aucun clone nécessaire. L'image est publiée publiquement sur GHCR (`ghcr.io/hug-efrei/huguette`).
 
 ```bash
 # 1. Récupérer le compose et le .env d'exemple
