@@ -15,6 +15,7 @@ Interface web pixel art (style Pokémon FireRed) pour rechercher et acquérir de
 - [Installation — Docker depuis le repo](#installation--docker-depuis-le-repo)
 - [Installation — Python local](#installation--python-local-sans-docker)
 - [Installation — systemd](#installation--systemd-production-sans-docker)
+- [Script post-téléchargement (Calibre-Web-Automated)](#script-post-téléchargement-calibre-web-automated)
 - [Mise à jour](#mise-à-jour)
 - [Commandes utiles](#commandes-utiles)
 - [Architecture](#architecture)
@@ -130,6 +131,67 @@ sudo cp /opt/huguette/deploy/huguette.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now huguette
 sudo systemctl status huguette
+```
+
+---
+
+## Script post-téléchargement (Calibre-Web-Automated)
+
+Le script `scripts/post-download.sh` est appelé automatiquement par qBittorrent à la fin de chaque téléchargement. Il copie les fichiers ebooks (epub, pdf, mobi, cbz, cbr, azw3) de la catégorie `huguette` vers le watchfolder de **Calibre-Web-Automated**, tout en laissant le torrent en seed.
+
+### 1. Configurer le script
+
+Éditer `scripts/post-download.sh` et adapter les deux variables en haut :
+
+```bash
+WATCH_FOLDER="/data/cwa-book-ingest"   # chemin vers le watchfolder CWA
+LOG_FILE="/tmp/huguette_script.log"    # fichier de log
+```
+
+### 2. Déployer le script sur la machine qBittorrent
+
+```bash
+# Copier le script sur la machine qui héberge qBittorrent
+scp scripts/post-download.sh user@<ip-qbittorrent>:/opt/huguette-post-download.sh
+
+# Le rendre exécutable
+ssh user@<ip-qbittorrent> chmod +x /opt/huguette-post-download.sh
+```
+
+### 3. Configurer qBittorrent
+
+Dans **qBittorrent → Outils → Options → Téléchargements**, activer :
+
+> ☑ Exécuter un programme externe à la fin d'un torrent
+
+Renseigner la commande suivante :
+
+```
+/opt/huguette-post-download.sh "%L" "%F" "%N"
+```
+
+| Paramètre qBit | Signification |
+|---|---|
+| `%L` | Catégorie du torrent (doit être `huguette`) |
+| `%F` | Chemin complet vers le fichier ou dossier téléchargé |
+| `%N` | Nom du torrent |
+
+### 4. Vérifier le fonctionnement
+
+Après le prochain téléchargement via Huguette :
+
+```bash
+# Sur la machine qBittorrent
+cat /tmp/huguette_script.log
+```
+
+Un log réussi ressemble à :
+```
+--- 2026-04-30 12:00:00 ---
+Analyse : Mon.Livre.epub (Catégorie détectée : huguette)
+Cible détectée : Mon.Livre.epub
+-> Succès : Copié dans le watchfolder.
+Traitement terminé.
 ```
 
 ---
