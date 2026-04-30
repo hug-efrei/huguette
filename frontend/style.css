@@ -210,6 +210,8 @@ img, canvas { image-rendering: pixelated; }
 
 .nav-btn:active { transform: translate(1px, 1px); }
 
+a.nav-btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+
 /* ══ MAIN ═══════════════════════════════════════════════ */
 main {
   padding: 18px 12px 60px;

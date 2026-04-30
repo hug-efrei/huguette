@@ -184,6 +184,10 @@ async function apiHealth() {
   try { const r = await fetch('/api/health'); return r.ok; } catch { return false; }
 }
 
+async function apiConfig() {
+  try { const r = await fetch('/api/config'); return r.ok ? r.json() : {}; } catch { return {}; }
+}
+
 // ── Render résultats (fiches RP) ──────────────────────────
 
 let _lastResults = [];
@@ -410,6 +414,14 @@ async function checkHealth() {
 document.addEventListener('DOMContentLoaded', () => {
   drawAvatar();
   checkHealth();
+
+  apiConfig().then(({ library_url }) => {
+    if (library_url) {
+      const btn = document.getElementById('btn-library');
+      btn.href   = library_url;
+      btn.hidden = false;
+    }
+  });
 
   document.getElementById('search-btn').addEventListener('click', onSearch);
   document.getElementById('search-input').addEventListener('keydown', (e) => {

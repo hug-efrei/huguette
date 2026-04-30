@@ -50,4 +50,9 @@ async def api_health():
     return {"status": "ok", "service": "Huguette"}
 
 
+@app.get("/api/config")
+async def api_config():
+    return {"library_url": settings.library_url}
+
+
 app.mount("/", StaticFiles(directory="frontend", html=True), name="static")
