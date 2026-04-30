@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from config import settings
 from prowlarr import search_books
 from qbittorrent import add_torrent, get_torrents
 
