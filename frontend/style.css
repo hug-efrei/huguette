@@ -667,6 +667,11 @@ main {
 /* ── Tab panels ─────────────────────────────────────────── */
 .tab-panel[hidden] { display: none; }
 
+/* ══ MOBILE (< 640px) ══════════════════════════════════════ */
+@media (max-width: 639px) {
+  .nav-btn { font-size: 6px; padding: 8px 6px; letter-spacing: 0; }
+}
+
 /* ══ DESKTOP (≥ 640px) ═════════════════════════════════════ */
 @media (min-width: 640px) {
   .site-header {
