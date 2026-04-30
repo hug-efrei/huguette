@@ -1,7 +1,7 @@
 services:
   huguette:
+    image: ghcr.io/hug-efrei/huguette:latest
     build: .
-    image: huguette:latest
     container_name: huguette
     restart: unless-stopped
     ports:
