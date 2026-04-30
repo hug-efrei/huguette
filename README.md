@@ -18,6 +18,7 @@ Interface web pixel art (style Pokémon FireRed) pour rechercher et acquérir de
 - [Script post-téléchargement (Calibre-Web-Automated)](#script-post-téléchargement-calibre-web-automated)
 - [Mise à jour](#mise-à-jour)
 - [Commandes utiles](#commandes-utiles)
+- [Workflow de développement](#workflow-de-développement)
 - [Architecture](#architecture)
 
 ---
@@ -240,6 +241,83 @@ sudo journalctl -u huguette -f
 # Healthcheck
 curl http://localhost:8000/api/health
 ```
+
+---
+
+## Workflow de développement
+
+> `main` est protégé — tout changement passe par une **Pull Request** dont la CI doit être verte.
+
+### Faire une modification
+
+```bash
+# 1. Toujours partir d'un main à jour
+git checkout main
+git pull
+
+# 2. Créer une branche (choisir un nom explicite)
+git checkout -b feat/ma-nouvelle-fonctionnalite
+# ou : fix/description-du-bug
+# ou : docs/ce-que-je-documente
+
+# 3. Coder, puis committer
+git add nom-du-fichier.py          # ajouter des fichiers précis
+git add frontend/app.js style.css  # ou plusieurs à la fois
+git commit -m "Description courte de ce qui change"
+
+# 4. Pousser la branche sur GitHub
+git push -u origin feat/ma-nouvelle-fonctionnalite
+# (la prochaine fois sur la même branche : git push suffit)
+
+# 5. Ouvrir une Pull Request
+gh pr create --title "Titre de la PR" --body "Description des changements"
+# → la CI se lance automatiquement (lint + smoke test)
+# → si tout est vert, merger sur GitHub
+
+# 6. Après le merge, nettoyer en local
+git checkout main
+git pull
+git branch -d feat/ma-nouvelle-fonctionnalite
+```
+
+### Corriger une erreur après un commit (avant le push)
+
+```bash
+# Modifier les fichiers, puis :
+git add fichier-corrigé.py
+git commit --amend --no-edit   # écrase le dernier commit
+```
+
+### Voir ce qui a changé
+
+```bash
+git status                  # fichiers modifiés / non suivis
+git diff                    # changements non committés
+git log --oneline -10       # 10 derniers commits
+gh pr list                  # PRs ouvertes
+gh run list                 # runs CI récents
+```
+
+### Déployer après merge
+
+```bash
+# Sur le LXC (ou toute machine avec Docker)
+docker compose pull && docker compose up -d
+
+# Vérifier
+docker compose logs -f
+curl http://localhost:8000/api/health
+```
+
+### Nommer ses branches
+
+| Préfixe | Usage |
+|---|---|
+| `feat/` | Nouvelle fonctionnalité |
+| `fix/` | Correction de bug |
+| `docs/` | Documentation uniquement |
+| `chore/` | Maintenance (deps, CI, config) |
+| `refactor/` | Refactoring sans changement de comportement |
 
 ---
 
