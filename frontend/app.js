@@ -6,6 +6,8 @@
 // Chaque entrée est un uint32 0xAARRGGBB (alpha=0 → transparent).
 // Sprite dessiné par l'utilisateur, rendu pixel par pixel.
 
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 const AVATAR_W = 24;
 const AVATAR_H = 24;
 
@@ -75,6 +77,12 @@ function setDialogue(text) {
   const el     = document.getElementById('dialogue-text');
   const arrow  = document.getElementById('dialogue-arrow');
   if (_typeTimer) clearInterval(_typeTimer);
+
+  if (REDUCED_MOTION) {
+    el.textContent = text;
+    if (arrow) arrow.style.opacity = '1';
+    return;
+  }
 
   el.textContent = '';
   if (arrow) arrow.style.opacity = '0';
@@ -331,8 +339,11 @@ async function onSearch() {
   const btn = document.getElementById('search-btn');
   btn.disabled = true;
   setDialogue(DIALOGUES.search);
-  document.getElementById('results-area').hidden = true;
-  document.getElementById('empty-state').hidden  = true;
+  document.getElementById('empty-state').hidden = true;
+
+  const grid = document.getElementById('results-grid');
+  grid.innerHTML = '<div class="fiche skeleton"></div><div class="fiche skeleton"></div><div class="fiche skeleton"></div>';
+  document.getElementById('results-area').hidden = false;
 
   try {
     const data    = await apiSearch(q);
@@ -351,6 +362,7 @@ async function onSearch() {
   } catch (err) {
     setDialogue(`Erreur : ${err.message}`);
     showToast(err.message, 'error');
+    document.getElementById('results-area').hidden = true;
   } finally {
     btn.disabled = false;
   }
@@ -421,6 +433,15 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.href   = library_url;
       btn.hidden = false;
     }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') {
+      if (e.key === 'Escape') { e.target.value = ''; e.target.blur(); }
+      return;
+    }
+    if (e.key === '/') { e.preventDefault(); document.getElementById('search-input').focus(); }
   });
 
   document.getElementById('search-btn').addEventListener('click', onSearch);

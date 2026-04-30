@@ -1,11 +1,21 @@
+import logging
+
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from config import settings
+from prowlarr import ping as ping_prowlarr
 from prowlarr import search_books
 from qbittorrent import add_torrent, get_torrents
+from qbittorrent import ping as ping_qbit
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("huguette")
 
 app = FastAPI(title="Huguette", version="1.0.0")
 
@@ -23,6 +33,7 @@ async def api_search(q: str):
         results = await search_books(q.strip())
         return {"results": results, "count": len(results)}
     except Exception as exc:
+        logger.exception("Erreur recherche Prowlarr")
         raise HTTPException(status_code=502, detail=str(exc))
 
 
@@ -34,6 +45,7 @@ async def api_download(req: DownloadRequest):
         ok = await add_torrent(req.magnet, req.title)
         return {"success": ok}
     except Exception as exc:
+        logger.exception("Erreur ajout torrent qBittorrent")
         raise HTTPException(status_code=502, detail=str(exc))
 
 
@@ -43,12 +55,18 @@ async def api_status():
         torrents = await get_torrents()
         return {"torrents": torrents}
     except Exception as exc:
+        logger.exception("Erreur récupération torrents")
         raise HTTPException(status_code=502, detail=str(exc))
 
 
 @app.get("/api/health")
 async def api_health():
-    return {"status": "ok", "service": "Huguette"}
+    prowlarr_ok, qbit_ok = await ping_prowlarr(), await ping_qbit()
+    ok = prowlarr_ok and qbit_ok
+    return JSONResponse(
+        status_code=200 if ok else 503,
+        content={"status": "ok" if ok else "degraded", "prowlarr": prowlarr_ok, "qbit": qbit_ok},
+    )
 
 
 @app.get("/api/config")

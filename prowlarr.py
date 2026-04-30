@@ -1,36 +1,42 @@
+import logging
+
 import httpx
+
 from config import settings
+
+logger = logging.getLogger("huguette.prowlarr")
 
 EBOOK_CATEGORY = 7020
 
-# IDs de catégories non-livre à exclure côté serveur (films, audio, TV, etc.)
 NON_BOOK_CATS = set(range(1000, 7000)) | {8000, 8010, 8020}
 
 
 def _is_ebook(item: dict) -> bool:
-    """Vérifie côté client que le résultat est bien un ebook."""
     cats = [c.get("id", 0) for c in item.get("categories", [])]
     if not cats:
-        return True  # pas de catégorie renseignée → on garde
+        return True
     return not any(c in NON_BOOK_CATS for c in cats)
 
 
 async def search_books(query: str) -> list[dict]:
-    # Liste de tuples : encodage httpx garanti, brackets compris
     params = [
         ("query", query),
         ("type", "search"),
         ("categories[]", EBOOK_CATEGORY),
     ]
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.get(
-            f"{settings.prowlarr_url}/api/v1/search",
-            params=params,
-            headers={"X-Api-Key": settings.prowlarr_api_key},
-        )
-        resp.raise_for_status()
-        raw = resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                f"{settings.prowlarr_url}/api/v1/search",
+                params=params,
+                headers={"X-Api-Key": settings.prowlarr_api_key},
+            )
+            resp.raise_for_status()
+            raw = resp.json()
+    except httpx.HTTPError as exc:
+        logger.warning("Prowlarr search error: %s", exc)
+        raise
 
     results = []
     for item in raw:
@@ -55,3 +61,15 @@ async def search_books(query: str) -> list[dict]:
 
     results.sort(key=lambda r: r["seeders"], reverse=True)
     return results
+
+
+async def ping() -> bool:
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(
+                f"{settings.prowlarr_url}/api/v1/system/status",
+                headers={"X-Api-Key": settings.prowlarr_api_key},
+            )
+            return resp.status_code == 200
+    except Exception:
+        return False

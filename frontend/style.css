@@ -432,6 +432,25 @@ main {
   margin: calc(var(--px)*3);
 }
 
+.fiche.skeleton {
+  min-height: 140px;
+  background: linear-gradient(90deg, var(--navy) 25%, var(--navy-hi) 50%, var(--navy) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s infinite;
+}
+
+.fiche.skeleton::after { display: none; }
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fiche.skeleton { animation: none; background: var(--navy); }
+  .status-dot     { animation: none !important; }
+}
+
 .fiche::after {
   content: '';
   position: absolute;
