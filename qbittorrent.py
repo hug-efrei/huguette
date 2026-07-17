@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 import httpx
@@ -7,39 +8,63 @@ from config import settings
 logger = logging.getLogger("huguette.qbit")
 
 _client: httpx.AsyncClient | None = None
-_cookies: httpx.Cookies | None = None
+_authenticated = False
+_login_lock: asyncio.Lock | None = None
+
+
+def startup() -> None:
+    global _client, _login_lock, _authenticated
+    _client = httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0))
+    _login_lock = asyncio.Lock()
+    _authenticated = False
+
+
+async def shutdown() -> None:
+    global _client
+    if _client is not None:
+        await _client.aclose()
+        _client = None
 
 
 def _get_client() -> httpx.AsyncClient:
-    global _client
     if _client is None:
-        _client = httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0))
+        raise RuntimeError("Client qBittorrent non initialisé (lifespan manquant)")
     return _client
 
 
 async def _login() -> None:
-    global _cookies
-    client = _get_client()
-    resp = await client.post(
-        f"{settings.qbit_url}/api/v2/auth/login",
-        data={"username": settings.qbit_username, "password": settings.qbit_password},
-    )
-    if resp.text.strip() != "Ok.":
-        raise RuntimeError("qBittorrent : échec de l'authentification")
-    _cookies = resp.cookies
-    logger.info("session qBittorrent renouvelée")
+    global _authenticated
+    assert _login_lock is not None, "Client qBittorrent non initialisé (lifespan manquant)"
+    async with _login_lock:
+        if _authenticated:
+            return
+        client = _get_client()
+        resp = await client.post(
+            f"{settings.qbit_url}/api/v2/auth/login",
+            data={"username": settings.qbit_username, "password": settings.qbit_password},
+        )
+        if resp.text.strip() != "Ok.":
+            raise RuntimeError("qBittorrent : échec de l'authentification")
+        _authenticated = True
+        logger.info("session qBittorrent renouvelée")
+
+
+async def _force_relogin() -> None:
+    global _authenticated
+    assert _login_lock is not None, "Client qBittorrent non initialisé (lifespan manquant)"
+    async with _login_lock:
+        _authenticated = False
+    await _login()
 
 
 async def _request(method: str, path: str, **kwargs) -> httpx.Response:
-    global _cookies
-    if _cookies is None:
+    if not _authenticated:
         await _login()
     client = _get_client()
-    resp = await client.request(method, f"{settings.qbit_url}{path}", cookies=_cookies, **kwargs)
+    resp = await client.request(method, f"{settings.qbit_url}{path}", **kwargs)
     if resp.status_code == 403:
-        _cookies = None
-        await _login()
-        resp = await client.request(method, f"{settings.qbit_url}{path}", cookies=_cookies, **kwargs)
+        await _force_relogin()
+        resp = await client.request(method, f"{settings.qbit_url}{path}", **kwargs)
     return resp
 
 

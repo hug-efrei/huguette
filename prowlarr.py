@@ -10,6 +10,26 @@ EBOOK_CATEGORY = 7020
 
 NON_BOOK_CATS = set(range(1000, 7000)) | {8000, 8010, 8020}
 
+_client: httpx.AsyncClient | None = None
+
+
+def startup() -> None:
+    global _client
+    _client = httpx.AsyncClient(timeout=30.0)
+
+
+async def shutdown() -> None:
+    global _client
+    if _client is not None:
+        await _client.aclose()
+        _client = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    if _client is None:
+        raise RuntimeError("Client Prowlarr non initialisé (lifespan manquant)")
+    return _client
+
 
 def _is_ebook(item: dict) -> bool:
     cats = [c.get("id", 0) for c in item.get("categories", [])]
@@ -26,14 +46,13 @@ async def search_books(query: str) -> list[dict]:
     ]
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(
-                f"{settings.prowlarr_url}/api/v1/search",
-                params=params,
-                headers={"X-Api-Key": settings.prowlarr_api_key},
-            )
-            resp.raise_for_status()
-            raw = resp.json()
+        resp = await _get_client().get(
+            f"{settings.prowlarr_url}/api/v1/search",
+            params=params,
+            headers={"X-Api-Key": settings.prowlarr_api_key},
+        )
+        resp.raise_for_status()
+        raw = resp.json()
     except httpx.HTTPError as exc:
         logger.warning("Prowlarr search error: %s", exc)
         raise
@@ -65,11 +84,11 @@ async def search_books(query: str) -> list[dict]:
 
 async def ping() -> bool:
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(
-                f"{settings.prowlarr_url}/api/v1/system/status",
-                headers={"X-Api-Key": settings.prowlarr_api_key},
-            )
-            return resp.status_code == 200
+        resp = await _get_client().get(
+            f"{settings.prowlarr_url}/api/v1/system/status",
+            headers={"X-Api-Key": settings.prowlarr_api_key},
+            timeout=2.0,
+        )
+        return resp.status_code == 200
     except Exception:
         return False

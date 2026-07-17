@@ -265,15 +265,18 @@ function renderResults(results) {
           <span class="tag tag-seeders ${seed.cls}">${escapeHtml(seed.label)}</span>
           <span class="tag tag-indexer">${escapeHtml(r.indexer)}</span>
         </div>
-        <button class="btn-emprunter"
-          data-magnet="${escapeHtml(r.magnet)}"
-          data-title="${escapeHtml(r.title)}">
-          EMPRUNTER
-        </button>
       </div>
     `;
 
-    fiche.querySelector('.btn-emprunter').addEventListener('click', onDownloadClick);
+    // Bouton construit via DOM/dataset : le magnet ne transite jamais par innerHTML.
+    const btn = document.createElement('button');
+    btn.className = 'btn-emprunter';
+    btn.dataset.magnet = r.magnet;
+    btn.dataset.title = r.title;
+    btn.textContent = 'EMPRUNTER';
+    btn.addEventListener('click', onDownloadClick);
+
+    fiche.querySelector('.fiche-footer').appendChild(btn);
     list.appendChild(fiche);
   });
 }
@@ -402,6 +405,32 @@ async function onRefreshDownloads() {
   }
 }
 
+// ── Auto-refresh de l'onglet Téléchargements ────────────────
+
+const DOWNLOADS_REFRESH_MS = 5000;
+let _downloadsRefreshTimer = null;
+
+function startDownloadsAutoRefresh() {
+  stopDownloadsAutoRefresh();
+  onRefreshDownloads();
+  _downloadsRefreshTimer = setInterval(() => {
+    if (document.hidden) return; // onglet navigateur en arrière-plan : on coupe
+    onRefreshDownloads();
+  }, DOWNLOADS_REFRESH_MS);
+}
+
+function stopDownloadsAutoRefresh() {
+  if (_downloadsRefreshTimer) {
+    clearInterval(_downloadsRefreshTimer);
+    _downloadsRefreshTimer = null;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !_downloadsRefreshTimer) return;
+  onRefreshDownloads(); // rattrapage immédiat au retour au premier plan
+});
+
 // ── Tabs ──────────────────────────────────────────────────
 
 function switchTab(name) {
@@ -409,6 +438,12 @@ function switchTab(name) {
   document.querySelectorAll('.nav-btn').forEach((b)  => { b.classList.remove('active'); });
   document.getElementById(`panel-${name}`).hidden = false;
   document.getElementById(`tab-${name}`).classList.add('active');
+
+  if (name === 'downloads') {
+    startDownloadsAutoRefresh();
+  } else {
+    stopDownloadsAutoRefresh();
+  }
 }
 
 // ── Health ────────────────────────────────────────────────
@@ -448,10 +483,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('search-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') onSearch();
   });
-  document.getElementById('refresh-btn').addEventListener('click', () => {
-    setDialogue(DIALOGUES.status);
-    onRefreshDownloads();
-  });
   document.getElementById('tab-search').addEventListener('click', () => {
     switchTab('search');
     const msg = _lastResults.length > 0
@@ -463,7 +494,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('tab-downloads').addEventListener('click', () => {
     switchTab('downloads');
     setDialogue(DIALOGUES.status);
-    onRefreshDownloads();
   });
 
   // Tri des résultats de recherche (tri-état par bouton)

@@ -2,6 +2,22 @@
    HUGUETTE — Pokémon FireRed RP Theme
    ═══════════════════════════════════════════════════════════ */
 
+@font-face {
+  font-family: 'Pixelify Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('fonts/pixelify-sans-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Press Start 2P';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/press-start-2p-latin.woff2') format('woff2');
+}
+
 :root {
   /* FireRed palette */
   --bg:           #f8e8c0;   /* sandy cream (route bg) */
