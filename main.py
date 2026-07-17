@@ -1,10 +1,16 @@
 import logging
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
+import prowlarr
+import qbittorrent
 from config import settings
 from prowlarr import ping as ping_prowlarr
 from prowlarr import search_books
@@ -17,36 +23,56 @@ logging.basicConfig(
 )
 logger = logging.getLogger("huguette")
 
-app = FastAPI(title="Huguette", version="1.0.0")
+limiter = Limiter(key_func=get_remote_address)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    prowlarr.startup()
+    qbittorrent.startup()
+    yield
+    await prowlarr.shutdown()
+    await qbittorrent.shutdown()
+
+
+app = FastAPI(title="Huguette", version="1.0.0", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 class DownloadRequest(BaseModel):
     magnet: str
     title: str = ""
 
+    @field_validator("magnet")
+    @classmethod
+    def check_magnet(cls, v: str) -> str:
+        if not v.startswith("magnet:?xt=urn:btih:"):
+            raise ValueError("Magnet invalide")
+        return v
+
 
 @app.get("/api/search")
-async def api_search(q: str):
+@limiter.limit("10/minute")
+async def api_search(request: Request, q: str):
     if not q.strip():
         raise HTTPException(status_code=400, detail="Requête vide")
     try:
         results = await search_books(q.strip())
         return {"results": results, "count": len(results)}
-    except Exception as exc:
+    except Exception:
         logger.exception("Erreur recherche Prowlarr")
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail="Prowlarr indisponible")
 
 
 @app.post("/api/download")
 async def api_download(req: DownloadRequest):
-    if not req.magnet.strip():
-        raise HTTPException(status_code=400, detail="Magnet manquant")
     try:
         ok = await add_torrent(req.magnet, req.title)
         return {"success": ok}
-    except Exception as exc:
+    except Exception:
         logger.exception("Erreur ajout torrent qBittorrent")
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail="qBittorrent indisponible")
 
 
 @app.get("/api/status")
@@ -54,13 +80,20 @@ async def api_status():
     try:
         torrents = await get_torrents()
         return {"torrents": torrents}
-    except Exception as exc:
+    except Exception:
         logger.exception("Erreur récupération torrents")
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail="qBittorrent indisponible")
 
 
 @app.get("/api/health")
 async def api_health():
+    """Liveness : renvoie toujours 200 si le process tourne."""
+    return {"status": "ok"}
+
+
+@app.get("/api/health/deps")
+async def api_health_deps():
+    """Readiness : état réel des dépendances (Prowlarr/qBittorrent) pour le monitoring."""
     prowlarr_ok, qbit_ok = await ping_prowlarr(), await ping_qbit()
     ok = prowlarr_ok and qbit_ok
     return JSONResponse(

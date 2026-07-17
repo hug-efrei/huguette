@@ -142,12 +142,13 @@ Le script `scripts/post-download.sh` est appelé automatiquement par qBittorrent
 
 ### 1. Configurer le script
 
-Éditer `scripts/post-download.sh` et adapter les deux variables en haut :
+Éditer `scripts/post-download.sh` et adapter la variable en haut :
 
 ```bash
 WATCH_FOLDER="/data/cwa-book-ingest"   # chemin vers le watchfolder CWA
-LOG_FILE="/tmp/huguette_script.log"    # fichier de log
 ```
+
+Le fichier de log est créé automatiquement à côté du script (ex. `/opt/huguette_post_download.log`), pas dans `/tmp`, pour survivre à un redémarrage.
 
 ### 2. Déployer le script sur la machine qBittorrent
 
@@ -183,7 +184,7 @@ Après le prochain téléchargement via Huguette :
 
 ```bash
 # Sur la machine qBittorrent
-cat /tmp/huguette_script.log
+cat /opt/huguette_post_download.log
 ```
 
 Un log réussi ressemble à :
