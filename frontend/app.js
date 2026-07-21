@@ -172,11 +172,11 @@ async function apiSearch(q) {
   return r.json();
 }
 
-async function apiDownload(magnet, title) {
+async function apiDownload(guid, title) {
   const r = await fetch('/api/download', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ magnet, title }),
+    body: JSON.stringify({ guid, title }),
   });
   if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || r.statusText); }
   return r.json();
@@ -268,10 +268,10 @@ function renderResults(results) {
       </div>
     `;
 
-    // Bouton construit via DOM/dataset : le magnet ne transite jamais par innerHTML.
+    // Bouton construit via DOM/dataset : le titre ne transite jamais par innerHTML.
     const btn = document.createElement('button');
     btn.className = 'btn-emprunter';
-    btn.dataset.magnet = r.magnet;
+    btn.dataset.guid = r.guid;
     btn.dataset.title = r.title;
     btn.textContent = 'EMPRUNTER';
     btn.addEventListener('click', onDownloadClick);
@@ -372,15 +372,15 @@ async function onSearch() {
 }
 
 async function onDownloadClick(e) {
-  const btn    = e.currentTarget;
-  const magnet = btn.dataset.magnet;
-  const title  = btn.dataset.title;
+  const btn   = e.currentTarget;
+  const guid  = btn.dataset.guid;
+  const title = btn.dataset.title;
 
   btn.disabled    = true;
   btn.textContent = '…';
 
   try {
-    const data = await apiDownload(magnet, title);
+    const data = await apiDownload(guid, title);
     if (data.success) {
       setDialogue(DIALOGUES.dl_ok(title));
       showToast('Ouvrage envoyé à la bibliothèque !', 'success');

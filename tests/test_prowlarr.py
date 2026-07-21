@@ -104,3 +104,35 @@ async def test_search_books_skips_items_without_magnet():
     results = await prowlarr.search_books("test")
 
     assert results == []
+
+
+@respx.mock
+async def test_search_books_caches_download_link_by_guid():
+    respx.get(f"{settings.prowlarr_url}/api/v1/search").mock(
+        return_value=Response(
+            200,
+            json=[
+                {
+                    "guid": "torznab-42",
+                    "title": "Livre sans magnet direct",
+                    "size": 100,
+                    "seeders": 3,
+                    "leechers": 0,
+                    "indexer": "I",
+                    "downloadUrl": f"{settings.prowlarr_url}/download?id=42",
+                    "categories": [],
+                    "publishDate": "",
+                },
+            ],
+        )
+    )
+
+    results = await prowlarr.search_books("test")
+
+    assert results[0]["guid"] == "torznab-42"
+    assert "magnet" not in results[0]
+    assert prowlarr.get_download_link("torznab-42") == f"{settings.prowlarr_url}/download?id=42"
+
+
+def test_get_download_link_returns_none_for_unknown_guid():
+    assert prowlarr.get_download_link("guid-jamais-vu-par-une-recherche") is None
