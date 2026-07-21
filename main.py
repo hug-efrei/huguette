@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -41,15 +41,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 class DownloadRequest(BaseModel):
-    magnet: str
+    guid: str
     title: str = ""
-
-    @field_validator("magnet")
-    @classmethod
-    def check_magnet(cls, v: str) -> str:
-        if not v.startswith("magnet:?xt=urn:btih:"):
-            raise ValueError("Magnet invalide")
-        return v
 
 
 @app.get("/api/search")
@@ -67,8 +60,14 @@ async def api_search(request: Request, q: str):
 
 @app.post("/api/download")
 async def api_download(req: DownloadRequest):
+    link = prowlarr.get_download_link(req.guid)
+    if link is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Résultat de recherche introuvable ou expiré, relancez la recherche",
+        )
     try:
-        ok = await add_torrent(req.magnet, req.title)
+        ok = await add_torrent(link, req.title)
         return {"success": ok}
     except Exception:
         logger.exception("Erreur ajout torrent qBittorrent")

@@ -1,4 +1,5 @@
 import logging
+from collections import OrderedDict
 
 import httpx
 
@@ -11,6 +12,26 @@ EBOOK_CATEGORY = 7020
 NON_BOOK_CATS = set(range(1000, 7000)) | {8000, 8010, 8020}
 
 _client: httpx.AsyncClient | None = None
+
+# guid -> lien de téléchargement (magnet ou URL de proxy Prowlarr), peuplé à
+# chaque recherche. Le client ne manipule jamais ce lien directement : il ne
+# transmet que le guid, ce qui évite de lui laisser choisir la cible que
+# qBittorrent ira récupérer (SSRF).
+_MAX_CACHED_LINKS = 500
+_download_links: "OrderedDict[str, str]" = OrderedDict()
+
+
+def _cache_download_link(guid: str, link: str) -> None:
+    if not guid:
+        return
+    _download_links[guid] = link
+    _download_links.move_to_end(guid)
+    while len(_download_links) > _MAX_CACHED_LINKS:
+        _download_links.popitem(last=False)
+
+
+def get_download_link(guid: str) -> str | None:
+    return _download_links.get(guid)
 
 
 def startup() -> None:
@@ -61,19 +82,20 @@ async def search_books(query: str) -> list[dict]:
     for item in raw:
         if not _is_ebook(item):
             continue
-        magnet = item.get("magnetUrl") or item.get("downloadUrl") or ""
-        if not magnet:
+        link = item.get("magnetUrl") or item.get("downloadUrl") or ""
+        if not link:
             continue
+        guid = item.get("guid", "")
+        _cache_download_link(guid, link)
         pub = item.get("publishDate") or ""
         pub_year = int(pub[:4]) if pub and pub[:4].isdigit() else None
         results.append({
-            "guid":       item.get("guid", ""),
+            "guid":       guid,
             "title":      item.get("title", "Titre inconnu"),
             "size":       item.get("size", 0),
             "seeders":    item.get("seeders", 0),
             "leechers":   item.get("leechers", 0),
             "indexer":    item.get("indexer", ""),
-            "magnet":     magnet,
             "categories": [c.get("name", "") for c in item.get("categories", [])],
             "pub_year":   pub_year,
         })
