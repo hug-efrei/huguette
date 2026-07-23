@@ -43,7 +43,10 @@ async def _login() -> None:
             f"{settings.qbit_url}/api/v2/auth/login",
             data={"username": settings.qbit_username, "password": settings.qbit_password},
         )
-        if resp.text.strip() != "Ok.":
+        # Les versions récentes de qBittorrent renvoient 204 (corps vide) au
+        # lieu de 200 + "Ok." : on se fie au statut HTTP plutôt qu'au corps,
+        # qui reste compatible avec les deux comportements.
+        if not resp.is_success:
             raise RuntimeError("qBittorrent : échec de l'authentification")
         _authenticated = True
         logger.info("session qBittorrent renouvelée")
@@ -75,7 +78,15 @@ async def add_torrent(magnet: str, title: str = "") -> bool:
         data={"urls": magnet, "category": "huguette", "autoTMM": "true"},
         timeout=15.0,
     )
-    return resp.text.strip() == "Ok."
+    if not resp.is_success:
+        return False
+    # Les versions récentes de qBittorrent renvoient un JSON
+    # {"success_count":...,"failure_count":...} au lieu du texte "Ok." des
+    # anciennes versions — on gère les deux.
+    try:
+        return resp.json().get("failure_count", 0) == 0
+    except ValueError:
+        return resp.text.strip() == "Ok."
 
 
 async def get_torrents() -> list[dict]:
