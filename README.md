@@ -1,6 +1,6 @@
 # Huguette — Bibliothécaire Numérique
 
-Interface web pixel art (style Pokémon FireRed) pour rechercher et acquérir des ebooks. Relie **Prowlarr** (indexeurs torrents) à **qBittorrent** et déverse les ouvrages dans le watchfolder de **Calibre**.
+Interface web pixel art (style Pokémon FireRed) pour rechercher et acquérir des ebooks. Relie **Prowlarr** (indexeurs torrents) à **qBittorrent** et envoie les ouvrages téléchargés au Book Dock de **BookOrbit**.
 
 ![Stack](https://img.shields.io/badge/stack-FastAPI%20%2B%20vanilla%20JS-c63a3a)
 ![Docker](https://img.shields.io/badge/deploy-Docker-2496ed)
@@ -27,7 +27,7 @@ Interface web pixel art (style Pokémon FireRed) pour rechercher et acquérir de
 
 - Une instance **Prowlarr** accessible avec une clé API et au moins un indexeur ebook
 - Une instance **qBittorrent** (Web UI activée)
-- Un dossier de watchfolder pour Calibre (ou tout autre outil qui ingère les téléchargements)
+- Une instance **BookOrbit** avec un compte de service dédié (permission "Book Dock" uniquement — voir la section script post-téléchargement)
 - Pour Docker : `docker` ≥ 24 et `docker compose` v2
 - Pour le local : Python ≥ 3.11
 
@@ -50,7 +50,7 @@ Variables disponibles :
 | `QBIT_URL` | URL de qBittorrent | `http://192.168.1.202:8080` |
 | `QBIT_USERNAME` | Login qBittorrent | `admin` |
 | `QBIT_PASSWORD` | Mot de passe qBittorrent | `adminadmin` |
-| `LIBRARY_URL` | URL vers l'interface Calibre (optionnel) | _(vide — bouton masqué)_ |
+| `LIBRARY_URL` | URL vers l'interface de lecture, ex: Joseph (optionnel) | _(vide — bouton masqué)_ |
 
 ---
 
@@ -113,6 +113,16 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 Idéal pour un déploiement natif dans un LXC dédié.
 
+### Installeur automatique (recommandé)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hug-efrei/huguette/bookorbit-native/install.sh | bash
+```
+
+(remplacer `bookorbit-native` par `main` une fois la branche fusionnée). Sans variables d'environnement, le script demande interactivement `PROWLARR_URL`, `PROWLARR_API_KEY`, `QBIT_URL`, `QBIT_USERNAME`, `QBIT_PASSWORD`. Il installe Python/venv si besoin, crée un utilisateur système `huguette` dédié, installe les dépendances, écrit `/opt/huguette/.env` (permissions 600) et le service systemd, puis démarre. Relancer le script met à jour une installation existante (git pull + reinstall deps + restart).
+
+### Installation manuelle
+
 ```bash
 # 1. Cloner et préparer
 sudo git clone https://github.com/hug-efrei/huguette.git /opt/huguette
@@ -136,40 +146,46 @@ sudo systemctl status huguette
 
 ---
 
-## Script post-téléchargement (Calibre-Web-Automated)
+## Script post-téléchargement (BookOrbit)
 
-Le script `scripts/post-download.sh` est appelé automatiquement par qBittorrent à la fin de chaque téléchargement. Il copie les fichiers ebooks (epub, pdf, mobi, cbz, cbr, azw3) de la catégorie `huguette` vers le watchfolder de **Calibre-Web-Automated**, tout en laissant le torrent en seed.
+Le script `scripts/post-download.sh` est appelé automatiquement par qBittorrent à la fin de chaque téléchargement. Il envoie les fichiers ebooks (epub, pdf, mobi, cbz, cbr, azw3) de la catégorie `huguette` au **Book Dock** de BookOrbit via son API (authentification par session, pas de partage de filesystem requis entre les machines), tout en laissant le torrent en seed.
 
-### 1. Configurer le script
+Par défaut, un fichier envoyé au Book Dock reste **en attente de validation** dans BookOrbit (métadonnées auto-récupérées, finalisation manuelle dans l'UI). Pour un pipeline entièrement automatique, active `book_dock_auto_finalize_enabled` dans les réglages de BookOrbit avec une bibliothèque/dossier cible et un seuil de confiance.
 
-Éditer `scripts/post-download.sh` et adapter la variable en haut :
+### 1. Créer un compte de service dédié dans BookOrbit
+
+Dans BookOrbit (Réglages > Utilisateurs), crée un utilisateur avec la seule permission **Book Dock** — jamais le compte principal. Renseigne son mot de passe dans la configuration du script (étape suivante).
+
+### 2. Configurer le script
+
+Le script lit sa config depuis l'environnement — soit exportées avant l'appel, soit via le wrapper qBittorrent (étape 4) :
 
 ```bash
-WATCH_FOLDER="/data/cwa-book-ingest"   # chemin vers le watchfolder CWA
+BOOKORBIT_URL=http://192.168.1.24:3000   # URL de BookOrbit
+BOOKORBIT_USER=huguette                  # compte de service (permission Book Dock)
+BOOKORBIT_PASSWORD=xxxxx
 ```
 
 Le fichier de log est créé automatiquement à côté du script (ex. `/opt/huguette_post_download.log`), pas dans `/tmp`, pour survivre à un redémarrage.
 
-### 2. Déployer le script sur la machine qBittorrent
+### 3. Déployer le script sur la machine qBittorrent
 
 ```bash
 # Copier le script sur la machine qui héberge qBittorrent
 scp scripts/post-download.sh user@<ip-qbittorrent>:/opt/huguette-post-download.sh
-
-# Le rendre exécutable
 ssh user@<ip-qbittorrent> chmod +x /opt/huguette-post-download.sh
 ```
 
-### 3. Configurer qBittorrent
+### 4. Configurer qBittorrent
 
 Dans **qBittorrent → Outils → Options → Téléchargements**, activer :
 
 > ☑ Exécuter un programme externe à la fin d'un torrent
 
-Renseigner la commande suivante :
+Renseigner la commande suivante (les variables d'environnement sont injectées avant l'appel du script) :
 
 ```
-/opt/huguette-post-download.sh "%L" "%F" "%N"
+env BOOKORBIT_URL=http://192.168.1.24:3000 BOOKORBIT_USER=huguette BOOKORBIT_PASSWORD=xxxxx /opt/huguette-post-download.sh "%L" "%F" "%N"
 ```
 
 | Paramètre qBit | Signification |
@@ -178,7 +194,7 @@ Renseigner la commande suivante :
 | `%F` | Chemin complet vers le fichier ou dossier téléchargé |
 | `%N` | Nom du torrent |
 
-### 4. Vérifier le fonctionnement
+### 5. Vérifier le fonctionnement
 
 Après le prochain téléchargement via Huguette :
 
@@ -192,7 +208,7 @@ Un log réussi ressemble à :
 --- 2026-04-30 12:00:00 ---
 Analyse : Mon.Livre.epub (Catégorie détectée : huguette)
 Cible détectée : Mon.Livre.epub
--> Succès : Copié dans le watchfolder.
+-> Succès : envoyé au Book Dock BookOrbit (en attente de validation/finalisation).
 Traitement terminé.
 ```
 
@@ -338,6 +354,7 @@ huguette/
 ├── docker-compose.yml   Service `huguette` (image GHCR + build local)
 ├── deploy/
 │   └── huguette.service Unité systemd pour install native
+├── install.sh           Installeur LXC natif (systemd, sans Docker)
 └── .github/workflows/
     └── docker.yml       CI : build & push multi-arch sur GHCR
 ```
