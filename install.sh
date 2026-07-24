@@ -68,9 +68,12 @@ fi
 
 if [[ -d "$HUGUETTE_DIR/.git" ]]; then
   echo "--- Mise à jour du dépôt existant ---"
-  git -C "$HUGUETTE_DIR" fetch --depth 1 origin "$HUGUETTE_REF"
-  git -C "$HUGUETTE_DIR" checkout -q "$HUGUETTE_REF"
-  git -C "$HUGUETTE_DIR" reset --hard "origin/$HUGUETTE_REF" 2>/dev/null || git -C "$HUGUETTE_DIR" reset --hard FETCH_HEAD
+  # Le dépôt appartient à $HUGUETTE_USER (chown fait en fin d'installation
+  # précédente) : on exécute git en tant que cet utilisateur plutôt qu'en
+  # root, sinon git refuse l'opération ("detected dubious ownership").
+  runuser -u "$HUGUETTE_USER" -- git -C "$HUGUETTE_DIR" fetch --depth 1 origin "$HUGUETTE_REF"
+  runuser -u "$HUGUETTE_USER" -- git -C "$HUGUETTE_DIR" checkout -q "$HUGUETTE_REF"
+  runuser -u "$HUGUETTE_USER" -- git -C "$HUGUETTE_DIR" reset --hard "origin/$HUGUETTE_REF" 2>/dev/null || runuser -u "$HUGUETTE_USER" -- git -C "$HUGUETTE_DIR" reset --hard FETCH_HEAD
 else
   echo "--- Clonage du dépôt (ref: $HUGUETTE_REF) ---"
   rm -rf "$HUGUETTE_DIR"
