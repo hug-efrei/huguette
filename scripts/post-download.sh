@@ -48,19 +48,28 @@ fi
 # 3. Fonction d'envoi vers le Book Dock de BookOrbit
 traiter_fichier() {
     local f="$1"
-    local nom
+    local nom ext tmp_upload resp_file upload_status
     nom=$(basename "$f")
 
     # On n'envoie que les formats de livres
     if echo "$nom" | grep -iqE '\.(epub|pdf|mobi|cbz|cbr|azw3)$'; then
         echo "Cible détectée : $nom" >> "$LOG_FILE"
 
-        local resp_file
+        # curl -F parse le chemin du fichier (@path) en s'arrêtant au premier
+        # espace, ce qui fait échouer les noms de fichiers avec des espaces
+        # (curl 26 : "Failed to open/read local data"). On passe par un tmpfile
+        # au chemin sans espaces, et on transmet le vrai nom via filename=.
+        ext="${nom##*.}"
+        tmp_upload="$(mktemp --suffix=".${ext}")"
+        cp "$f" "$tmp_upload"
         resp_file="$(mktemp)"
+
         upload_status=$(curl -s -o "$resp_file" -w '%{http_code}' \
             -b "$COOKIE_JAR" \
             -X POST "$BOOKORBIT_URL/api/v1/book-dock/upload" \
-            -F "file=@${f};filename=${nom}")
+            -F "file=@${tmp_upload};filename=\"${nom}\"")
+
+        rm -f "$tmp_upload"
 
         if [ "$upload_status" = "201" ]; then
             echo "-> Succès : envoyé au Book Dock BookOrbit (en attente de validation/finalisation)." >> "$LOG_FILE"
